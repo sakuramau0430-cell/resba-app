@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { createWorker } from 'tesseract.js';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -34,6 +34,7 @@ export default function Home() {
   const [replies, setReplies] = useState<{ cynical?: string; logic?: string; provoke?: string } | null>(null);
   const [assistLoading, setAssistLoading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // --- 【AI vs AI 観戦】 ---
   const [watchTopic, setWatchTopic] = useState('猫派vs犬派');
@@ -45,6 +46,62 @@ export default function Home() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, watchLogs]);
+
+  // 画像ファイル処理関数（共通化）
+  const processImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+
+    setOcrLoading(true);
+    try {
+      const worker = await createWorker('jpn');
+      const ret = await worker.recognize(file);
+      setOpponentText(ret.data.text.replace(/\s+/g, ' '));
+      await worker.terminate();
+    } catch (err) {
+      alert('画像の読み取りに失敗しました');
+    } finally {
+      setOcrLoading(false);
+    }
+  }, []);
+
+  // ファイル選択からの画像読み込み
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(file);
+  };
+
+  // ドラッグ＆ドロップイベントハンドラー
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processImageFile(file);
+  };
+
+  // クリップボードからの貼り付け（Ctrl + V）ハンドラー
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          processImageFile(file);
+          break;
+        }
+      }
+    }
+  };
 
   // お題生成
   const handleGenerateTopic = async () => {
@@ -112,24 +169,6 @@ export default function Home() {
       alert('判定に失敗しました');
     } finally {
       setJudgeLoading(false);
-    }
-  };
-
-  // スクショ画像から文字読み取り（OCR）
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setOcrLoading(true);
-    try {
-      const worker = await createWorker('jpn');
-      const ret = await worker.recognize(file);
-      setOpponentText(ret.data.text.replace(/\s+/g, ' '));
-      await worker.terminate();
-    } catch (err) {
-      alert('画像の読み取りに失敗しました');
-    } finally {
-      setOcrLoading(false);
     }
   };
 
@@ -271,20 +310,31 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- 2. 反論参謀 & スクショ読み込み --- */}
+        {/* --- 2. 反論参謀 & スクショ読み込み（ドロップ・Ctrl+V対応） --- */}
         {mode === 'assist' && (
           <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 block">📷 スクショ（画像）から文字を自動読み込み:</label>
+            {/* ドロップ＆貼り付けエリア */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                isDragging ? 'border-blue-500 bg-blue-950/30' : 'border-gray-800 bg-gray-950'
+              }`}
+            >
+              <p className="text-xs text-gray-400 mb-2">
+                📷 画像をここにドラッグ＆ドロップ または <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-200">Ctrl + V</kbd> で貼り付け
+              </p>
               <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-gray-400" />
-              {ocrLoading && <div className="text-xs text-blue-400 animate-pulse">画像から文字を読み取り中...</div>}
+              {ocrLoading && <div className="text-xs text-blue-400 animate-pulse mt-2">画像から文字を読み取り中...</div>}
             </div>
 
             <form onSubmit={handleGenerateAssist} className="space-y-3">
               <textarea
                 value={opponentText}
                 onChange={(e) => setOpponentText(e.target.value)}
-                placeholder="相手の発言を入力（またはスクショ読み込み）"
+                onPaste={handlePaste}
+                placeholder="相手の発言を入力（スクショのドラッグ＆ドロップ・貼り付けにも対応）"
                 rows={4}
                 className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm text-white focus:outline-none"
                 required
