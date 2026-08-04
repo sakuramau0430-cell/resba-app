@@ -818,3 +818,27 @@ export default function Home() {
     </div>
   );
 }
+// 状態管理（useStateを追加）
+const [opponentText, setOpponentText] = useState('');
+const [myStance, setMyStance] = useState('');
+const [replies, setReplies] = useState<{ cynical?: string; logic?: string; provoke?: string } | null>(null);
+const [loading, setLoading] = useState(false);
+
+// 生成処理
+const generateReply = async () => {
+  if (!opponentText) return;
+  setLoading(true);
+  try {
+    const res = await fetch('/api/assist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ opponentText, myStance }),
+    });
+    const data = await res.json();
+    setReplies(data);
+  } catch (e) {
+    alert('エラーが発生しました');
+  } finally {
+    setLoading(false);
+  }
+};
