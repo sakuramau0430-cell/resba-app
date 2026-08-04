@@ -47,7 +47,7 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, watchLogs]);
 
-  // 画像ファイル処理関数（共通化）
+  // 画像ファイル処理関数
   const processImageFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return;
 
@@ -214,190 +214,272 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-black text-gray-100 flex justify-center font-sans">
-      <div className="w-full max-w-[600px] border-x border-gray-800 flex flex-col">
+      <div className="w-full max-w-[1200px] flex">
         
-        {/* ヘッダー */}
-        <header className="sticky top-0 bg-black/80 backdrop-blur-sm border-b border-gray-800 z-10">
-          <div className="px-4 py-3 flex justify-between items-center">
-            <h1 className="text-xl font-bold">レスバ・アリーナ X</h1>
+        {/* --- 左サイドバー（PC時のみ表示） --- */}
+        <aside className="hidden md:flex flex-col w-64 p-4 border-r border-gray-800 h-screen sticky top-0 justify-between">
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 px-2">
+              <span className="text-2xl font-black text-white tracking-wider">レスバ.AI</span>
+            </div>
+            
+            <nav className="space-y-1">
+              {[
+                { id: 'chat', label: '🥊 VS AI 特訓', desc: '1on1の対戦' },
+                { id: 'assist', label: '🛡️ 反論参謀', desc: 'レスバの自動作成' },
+                { id: 'watch', label: '🍿 AI観戦TV', desc: '自動対戦を鑑賞' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setMode(item.id as Mode)}
+                  className={`w-full text-left p-3 rounded-xl transition ${
+                    mode === item.id ? 'bg-gray-800 font-bold text-white' : 'hover:bg-gray-900 text-gray-400'
+                  }`}
+                >
+                  <div className="text-sm">{item.label}</div>
+                  <div className="text-[10px] text-gray-500">{item.desc}</div>
+                </button>
+              ))}
+            </nav>
           </div>
-          
-          {/* タブ切り替え */}
-          <div className="flex w-full border-b border-gray-800">
-            {(['chat', 'assist', 'watch'] as Mode[]).map((tab) => (
-              <button key={tab} onClick={() => setMode(tab)} className="flex-1 hover:bg-gray-900 transition">
-                <div className={`py-3 text-xs font-bold relative ${mode === tab ? 'text-white' : 'text-gray-500'}`}>
-                  {tab === 'chat' ? 'VS AI 特訓' : tab === 'assist' ? '反論参謀' : 'AI観戦TV'}
-                  {mode === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500 rounded-full" />}
-                </div>
-              </button>
-            ))}
-          </div>
-        </header>
 
-        {/* --- 1. VS AI 特訓 モード --- */}
-        {mode === 'chat' && (
-          <div className="flex-1 flex flex-col">
-            <div className="p-4 border-b border-gray-800 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">AI性格:</span>
-                <div className="flex gap-1.5">
-                  {['cynical', 'logic', 'provoke'].map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPersona(p)}
-                      className={`px-3 py-1 text-xs rounded-full font-bold border ${
-                        persona === p ? 'bg-white text-black' : 'bg-black text-white border-gray-700'
-                      }`}
-                    >
-                      {p === 'cynical' ? '冷笑' : p === 'logic' ? '論理' : '煽り'}
-                    </button>
+          <div className="p-3 bg-gray-900 border border-gray-800 rounded-xl text-xs space-y-1">
+            <div className="text-gray-400 font-bold">💡 勝ちの極意</div>
+            <p className="text-gray-500 text-[11px]">感情的にならず、相手の「前提」と「極論」を指摘するのが最も効果的です。</p>
+          </div>
+        </aside>
+
+        {/* --- メインコンテンツ（中央） --- */}
+        <div className="flex-1 max-w-[600px] border-r border-gray-800 flex flex-col min-h-screen">
+          
+          {/* ヘッダー */}
+          <header className="sticky top-0 bg-black/80 backdrop-blur-sm border-b border-gray-800 z-10">
+            <div className="px-4 py-3 flex justify-between items-center">
+              <h1 className="text-lg font-bold">レスバ・アリーナ X</h1>
+            </div>
+            
+            {/* モバイル用タブ切り替え */}
+            <div className="flex md:hidden w-full border-b border-gray-800">
+              {(['chat', 'assist', 'watch'] as Mode[]).map((tab) => (
+                <button key={tab} onClick={() => setMode(tab)} className="flex-1 hover:bg-gray-900 transition">
+                  <div className={`py-3 text-xs font-bold relative ${mode === tab ? 'text-white' : 'text-gray-500'}`}>
+                    {tab === 'chat' ? 'VS AI 特訓' : tab === 'assist' ? '反論参謀' : 'AI観戦TV'}
+                    {mode === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500 rounded-full" />}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </header>
+
+          {/* --- 1. VS AI 特訓 モード --- */}
+          {mode === 'chat' && (
+            <div className="flex-1 flex flex-col">
+              <div className="p-4 border-b border-gray-800 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">AI性格:</span>
+                  <div className="flex gap-1.5">
+                    {['cynical', 'logic', 'provoke'].map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPersona(p)}
+                        className={`px-3 py-1 text-xs rounded-full font-bold border ${
+                          persona === p ? 'bg-white text-black' : 'bg-black text-white border-gray-700'
+                        }`}
+                      >
+                        {p === 'cynical' ? '冷笑' : p === 'logic' ? '論理' : '煽り'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 items-center">
+                  <button onClick={handleGenerateTopic} disabled={topicLoading} className="bg-blue-500 text-xs px-3 py-1.5 rounded-full font-bold text-white">
+                    🎲 お題自動生成
+                  </button>
+                  <button onClick={handleJudge} disabled={judgeLoading} className="bg-purple-600 text-xs px-3 py-1.5 rounded-full font-bold text-white">
+                    ⚖️ 審判に採点してもらう
+                  </button>
+                </div>
+
+                {topic && <div className="text-xs text-amber-400 bg-gray-900 p-2 rounded">お題: {topic}</div>}
+
+                {/* 審判結果表示 */}
+                {judgeResult && (
+                  <div className="p-3 bg-purple-950/40 border border-purple-800 rounded-lg text-xs space-y-1">
+                    <div className="font-bold text-purple-300">⚖️ 判定結果: {judgeResult.winner}</div>
+                    <div>スコア - あなた: {judgeResult.userScore}点 | AI: {judgeResult.aiScore}点</div>
+                    <div className="text-gray-300">{judgeResult.userAdvice}</div>
+                    {judgeResult.fallacies && judgeResult.fallacies.length > 0 && (
+                      <div className="text-red-400">検出された詭弁: {judgeResult.fallacies.join(', ')}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* チャット対戦ログ */}
+              <div className="flex-1 overflow-y-auto bg-black p-4 space-y-4">
+                {messages.length === 0 ? (
+                  <div className="text-center text-gray-600 text-xs py-10">メッセージを入力するか「お題自動生成」を押して開始！</div>
+                ) : (
+                  messages.map((m, idx) => (
+                    <div key={idx} className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs">
+                        {m.role === 'user' ? '👤' : '🤖'}
+                      </div>
+                      <div className="flex-1 text-sm bg-gray-900 p-3 rounded-xl border border-gray-800 whitespace-pre-wrap">
+                        {m.content}
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-800 flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="主張を入力..."
+                  className="flex-1 bg-gray-900 border border-gray-800 rounded-full px-4 py-2 text-sm text-white focus:outline-none"
+                />
+                <button type="submit" disabled={loading} className="bg-blue-500 text-xs px-5 py-2 rounded-full font-bold text-white">
+                  送信
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* --- 2. 反論参謀 --- */}
+          {mode === 'assist' && (
+            <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                  isDragging ? 'border-blue-500 bg-blue-950/30' : 'border-gray-800 bg-gray-950'
+                }`}
+              >
+                <p className="text-xs text-gray-400 mb-2">
+                  📷 画像をここにドラッグ＆ドロップ または <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-200">Ctrl + V</kbd> で貼り付け
+                </p>
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-gray-400" />
+                {ocrLoading && <div className="text-xs text-blue-400 animate-pulse mt-2">画像から文字を読み取り中...</div>}
+              </div>
+
+              <form onSubmit={handleGenerateAssist} className="space-y-3">
+                <textarea
+                  value={opponentText}
+                  onChange={(e) => setOpponentText(e.target.value)}
+                  onPaste={handlePaste}
+                  placeholder="相手の発言を入力（スクショのドラッグ＆ドロップ・貼り付けにも対応）"
+                  rows={4}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm text-white focus:outline-none"
+                  required
+                />
+                <input
+                  type="text"
+                  value={myStance}
+                  onChange={(e) => setMyStance(e.target.value)}
+                  placeholder="こちらのスタンス（任意）"
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                />
+                <button type="submit" disabled={assistLoading} className="w-full bg-blue-500 py-2.5 rounded-full text-xs font-bold text-white">
+                  {assistLoading ? '生成中...' : '反論＆詭弁分析を生成'}
+                </button>
+              </form>
+
+              {replies && (
+                <div className="space-y-3 pt-2">
+                  {[
+                    { label: '😏 冷笑系', text: replies.cynical },
+                    { label: '🤓 論理派', text: replies.logic },
+                    { label: '🤬 煽りマウント', text: replies.provoke },
+                  ].map((item, i) => (
+                    <div key={i} className="bg-gray-900 border border-gray-800 p-3 rounded-lg space-y-1">
+                      <div className="text-xs font-bold text-blue-400">{item.label}</div>
+                      <p className="text-sm text-gray-200 whitespace-pre-wrap">{item.text}</p>
+                    </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="flex gap-2 items-center">
-                <button onClick={handleGenerateTopic} disabled={topicLoading} className="bg-blue-500 text-xs px-3 py-1.5 rounded-full font-bold text-white">
-                  🎲 お題自動生成
-                </button>
-                <button onClick={handleJudge} disabled={judgeLoading} className="bg-purple-600 text-xs px-3 py-1.5 rounded-full font-bold text-white">
-                  ⚖️ 審判に採点してもらう
-                </button>
-              </div>
-
-              {topic && <div className="text-xs text-amber-400 bg-gray-900 p-2 rounded">お題: {topic}</div>}
-
-              {/* 審判結果表示 */}
-              {judgeResult && (
-                <div className="p-3 bg-purple-950/40 border border-purple-800 rounded-lg text-xs space-y-1">
-                  <div className="font-bold text-purple-300">⚖️ 判定結果: {judgeResult.winner}</div>
-                  <div>スコア - あなた: {judgeResult.userScore}点 | AI: {judgeResult.aiScore}点</div>
-                  <div className="text-gray-300">{judgeResult.userAdvice}</div>
-                  {judgeResult.fallacies && judgeResult.fallacies.length > 0 && (
-                    <div className="text-red-400">検出された詭弁: {judgeResult.fallacies.join(', ')}</div>
-                  )}
-                </div>
               )}
             </div>
+          )}
 
-            {/* チャット対戦ログ */}
-            <div className="flex-1 overflow-y-auto bg-black p-4 space-y-4">
-              {messages.map((m, idx) => (
-                <div key={idx} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs">
-                    {m.role === 'user' ? '👤' : '🤖'}
-                  </div>
-                  <div className="flex-1 text-sm bg-gray-900 p-3 rounded-xl border border-gray-800 whitespace-pre-wrap">
-                    {m.content}
-                  </div>
+          {/* --- 3. AI vs AI 観戦モード --- */}
+          {mode === 'watch' && (
+            <div className="flex-1 flex flex-col p-4 space-y-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={watchTopic}
+                  onChange={(e) => setWatchTopic(e.target.value)}
+                  placeholder="観戦する議論テーマ"
+                  className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white"
+                />
+                <button onClick={handleNextWatchStep} disabled={watching} className="bg-red-600 px-4 py-1.5 rounded-full text-xs font-bold text-white">
+                  {watching ? 'レスバ中...' : '次のレスを観戦 🍿'}
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-3 bg-black">
+                {watchLogs.length === 0 ? (
+                  <div className="text-center text-gray-600 text-xs py-10">「次のレスを観戦」を押してAI同士のレスバを開始</div>
+                ) : (
+                  watchLogs.map((log, idx) => (
+                    <div key={idx} className="bg-gray-950 border border-gray-800 p-3 rounded-xl space-y-1">
+                      <div className="text-xs font-bold text-amber-400">{log.speaker}</div>
+                      <p className="text-sm text-gray-200">{log.content}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* --- 右サイドバー（PC時のみ表示） --- */}
+        <aside className="hidden lg:flex flex-col w-80 p-4 space-y-4 h-screen sticky top-0 overflow-y-auto">
+          {/* トレンドワード */}
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 space-y-3">
+            <h2 className="font-bold text-sm text-white">🔥 トレンドのレスバ</h2>
+            <div className="space-y-2.5">
+              {[
+                { tag: 'ストローマン論法', count: '1,240ポスト' },
+                { tag: 'AI vs 人間議論', count: '850ポスト' },
+                { tag: 'きのこの山 vs たけのこの里', count: '3,120ポスト' },
+                { tag: 'ひろゆき構文', count: '540ポスト' },
+              ].map((t, idx) => (
+                <div key={idx} className="text-xs cursor-pointer hover:bg-gray-900 p-1.5 rounded-lg transition">
+                  <div className="text-gray-500 text-[10px]">日本のトレンド</div>
+                  <div className="font-bold text-gray-200">#{t.tag}</div>
+                  <div className="text-gray-500 text-[10px]">{t.count}</div>
                 </div>
               ))}
-              <div ref={chatEndRef} />
             </div>
-
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-800 flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="主張を入力..."
-                className="flex-1 bg-gray-900 border border-gray-800 rounded-full px-4 py-2 text-sm text-white focus:outline-none"
-              />
-              <button type="submit" disabled={loading} className="bg-blue-500 text-xs px-5 py-2 rounded-full font-bold text-white">
-                送信
-              </button>
-            </form>
           </div>
-        )}
 
-        {/* --- 2. 反論参謀 & スクショ読み込み（ドロップ・Ctrl+V対応） --- */}
-        {mode === 'assist' && (
-          <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-            {/* ドロップ＆貼り付けエリア */}
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
-                isDragging ? 'border-blue-500 bg-blue-950/30' : 'border-gray-800 bg-gray-950'
-              }`}
-            >
-              <p className="text-xs text-gray-400 mb-2">
-                📷 画像をここにドラッグ＆ドロップ または <kbd className="px-1.5 py-0.5 bg-gray-800 rounded text-gray-200">Ctrl + V</kbd> で貼り付け
-              </p>
-              <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-gray-400" />
-              {ocrLoading && <div className="text-xs text-blue-400 animate-pulse mt-2">画像から文字を読み取り中...</div>}
-            </div>
-
-            <form onSubmit={handleGenerateAssist} className="space-y-3">
-              <textarea
-                value={opponentText}
-                onChange={(e) => setOpponentText(e.target.value)}
-                onPaste={handlePaste}
-                placeholder="相手の発言を入力（スクショのドラッグ＆ドロップ・貼り付けにも対応）"
-                rows={4}
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm text-white focus:outline-none"
-                required
-              />
-              <input
-                type="text"
-                value={myStance}
-                onChange={(e) => setMyStance(e.target.value)}
-                placeholder="こちらのスタンス（任意）"
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
-              />
-              <button type="submit" disabled={assistLoading} className="w-full bg-blue-500 py-2.5 rounded-full text-xs font-bold text-white">
-                {assistLoading ? '生成中...' : '反論＆詭弁分析を生成'}
-              </button>
-            </form>
-
-            {replies && (
-              <div className="space-y-3 pt-2">
-                {[
-                  { label: '😏 冷笑系', text: replies.cynical },
-                  { label: '🤓 論理派', text: replies.logic },
-                  { label: '🤬 煽りマウント', text: replies.provoke },
-                ].map((item, i) => (
-                  <div key={i} className="bg-gray-900 border border-gray-800 p-3 rounded-lg space-y-1">
-                    <div className="text-xs font-bold text-blue-400">{item.label}</div>
-                    <p className="text-sm text-gray-200 whitespace-pre-wrap">{item.text}</p>
-                  </div>
-                ))}
+          {/* 今日のランキング */}
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 space-y-3">
+            <h2 className="font-bold text-sm text-white">🏆 本日の論破王AI</h2>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center bg-gray-900 p-2 rounded-lg">
+                <span className="font-bold text-amber-400">1位 🤓 論理派AI</span>
+                <span className="text-gray-400">勝率 88%</span>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* --- 3. AI vs AI 観戦モード --- */}
-        {mode === 'watch' && (
-          <div className="flex-1 flex flex-col p-4 space-y-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={watchTopic}
-                onChange={(e) => setWatchTopic(e.target.value)}
-                placeholder="観戦する議論テーマ"
-                className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white"
-              />
-              <button onClick={handleNextWatchStep} disabled={watching} className="bg-red-600 px-4 py-1.5 rounded-full text-xs font-bold text-white">
-                {watching ? 'レスバ中...' : '次のレスを観戦 🍿'}
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-3 bg-black">
-              {watchLogs.length === 0 ? (
-                <div className="text-center text-gray-600 text-xs py-10">「次のレスを観戦」を押してAI同士のレスバを開始</div>
-              ) : (
-                watchLogs.map((log, idx) => (
-                  <div key={idx} className="bg-gray-950 border border-gray-800 p-3 rounded-xl space-y-1">
-                    <div className="text-xs font-bold text-amber-400">{log.speaker}</div>
-                    <p className="text-sm text-gray-200">{log.content}</p>
-                  </div>
-                ))
-              )}
+              <div className="flex justify-between items-center bg-gray-900 p-2 rounded-lg">
+                <span className="font-bold text-gray-300">2位 😏 冷笑系AI</span>
+                <span className="text-gray-400">勝率 74%</span>
+              </div>
+              <div className="flex justify-between items-center bg-gray-900 p-2 rounded-lg">
+                <span className="font-bold text-amber-700">3位 🤬 煽りマウントAI</span>
+                <span className="text-gray-400">勝率 51%</span>
+              </div>
             </div>
           </div>
-        )}
+        </aside>
 
       </div>
     </main>
