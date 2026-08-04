@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createWorker } from 'tesseract.js';
 
 type Message = { role: 'user' | 'assistant'; content: string };
-type WatchMessage = { speaker: '冷笑系AI' | '論理派AI'; content: string };
+type WatchMessage = { speaker: '冷笑系AI' | '論理派AI' | '煽りマウントAI'; content: string };
 type Mode = 'chat' | 'assist' | 'watch';
 
 type JudgeResult = {
@@ -40,6 +40,8 @@ export default function Home() {
   const [watchTopic, setWatchTopic] = useState('猫派vs犬派');
   const [watchLogs, setWatchLogs] = useState<WatchMessage[]>([]);
   const [watching, setWatching] = useState(false);
+  const [watchJudgeResult, setWatchJudgeResult] = useState<JudgeResult | null>(null);
+  const [watchJudgeLoading, setWatchJudgeLoading] = useState(false);
 
   // --- 【Xリアルタイムトレンド】 ---
   const [liveTrend, setLiveTrend] = useState<string>('取得中...');
@@ -75,6 +77,8 @@ export default function Home() {
     setJudgeResult(null);
     setTopic('');
     setInput('');
+    setWatchLogs([]);
+    setWatchJudgeResult(null);
     setMode('chat');
   };
 
@@ -184,7 +188,7 @@ export default function Home() {
     }
   };
 
-  // 審判判定
+  // 審判判定 (ユーザー vs AI)
   const handleJudge = async () => {
     if (messages.length === 0) return alert('まずはレスバをしてから判定を押してください');
     setJudgeLoading(true);
@@ -240,6 +244,57 @@ export default function Home() {
       alert('観戦レスバの生成に失敗しました');
     } finally {
       setWatching(false);
+    }
+  };
+
+  // AI vs AI 観戦の審判判定
+  const handleWatchJudge = async () => {
+    if (watchLogs.length === 0) return alert('まずはレスバを発生させてから判定を押してください');
+    setWatchJudgeLoading(true);
+    try {
+      // 観戦ログを標準メッセージ形式に変換して審判へ送る
+      const mappedMessages = watchLogs.map((log) => ({
+        role: (log.speaker.includes('冷笑') ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: `[${log.speaker}] ${log.content}`,
+      }));
+
+      const res = await fetch('/api/advanced', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'judge', payload: { messages: mappedMessages } }),
+      });
+      const data = await res.json();
+      setWatchJudgeResult(data);
+    } catch (e) {
+      alert('観戦レスバの判定に失敗しました');
+    } finally {
+      setWatchJudgeLoading(false);
+    }
+  };
+
+  // AIの種類に応じたスタイル定義ヘルパー
+  const getAISpeakerStyle = (speaker: string) => {
+    if (speaker.includes('冷笑')) {
+      return {
+        border: 'border-blue-900/60 bg-blue-950/20',
+        text: 'text-blue-400',
+        badge: 'bg-blue-900/50 text-blue-300 border-blue-700',
+        icon: '🧊',
+      };
+    } else if (speaker.includes('論理')) {
+      return {
+        border: 'border-emerald-900/60 bg-emerald-950/20',
+        text: 'text-emerald-400',
+        badge: 'bg-emerald-900/50 text-emerald-300 border-emerald-700',
+        icon: '🤓',
+      };
+    } else {
+      return {
+        border: 'border-rose-900/60 bg-rose-950/20',
+        text: 'text-rose-400',
+        badge: 'bg-rose-900/50 text-rose-300 border-rose-700',
+        icon: '🤬',
+      };
     }
   };
 
@@ -455,30 +510,62 @@ export default function Home() {
           {/* --- 3. AI vs AI 観戦モード --- */}
           {mode === 'watch' && (
             <div className="flex-1 flex flex-col p-4 space-y-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={watchTopic}
-                  onChange={(e) => setWatchTopic(e.target.value)}
-                  placeholder="観戦する議論テーマ"
-                  className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white"
-                />
-                <button onClick={handleNextWatchStep} disabled={watching} className="bg-red-600 px-4 py-1.5 rounded-full text-xs font-bold text-white">
-                  {watching ? 'レスバ中...' : '次のレスを観戦 🍿'}
-                </button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={watchTopic}
+                    onChange={(e) => setWatchTopic(e.target.value)}
+                    placeholder="観戦する議論テーマ"
+                    className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white"
+                  />
+                  <button onClick={handleNextWatchStep} disabled={watching} className="bg-red-600 hover:bg-red-500 px-4 py-1.5 rounded-full text-xs font-bold text-white transition">
+                    {watching ? 'レスバ中...' : '次のレスを観戦 🍿'}
+                  </button>
+                </div>
+
+                {watchLogs.length > 1 && (
+                  <button
+                    onClick={handleWatchJudge}
+                    disabled={watchJudgeLoading}
+                    className="w-full bg-purple-700 hover:bg-purple-600 text-xs py-2 rounded-xl font-bold text-white transition flex items-center justify-center gap-1"
+                  >
+                    ⚖️ レスバ勝敗を判定する
+                  </button>
+                )}
               </div>
 
+              {/* 勝敗判定表示 */}
+              {watchJudgeResult && (
+                <div className="p-3 bg-purple-950/40 border border-purple-800 rounded-xl text-xs space-y-1">
+                  <div className="font-bold text-purple-300 text-sm">🏆 勝者: {watchJudgeResult.winner}</div>
+                  <div className="text-gray-300">{watchJudgeResult.userAdvice}</div>
+                </div>
+              )}
+
+              {/* 観戦対話ログ */}
               <div className="flex-1 overflow-y-auto space-y-3 bg-black">
                 {watchLogs.length === 0 ? (
-                  <div className="text-center text-gray-600 text-xs py-10">「次のレスバを観戦」を押してAI同士のレスバを開始</div>
+                  <div className="text-center text-gray-600 text-xs py-10">「次のレスを観戦」を押してAI同士のレスバを開始</div>
                 ) : (
-                  watchLogs.map((log, idx) => (
-                    <div key={idx} className="bg-gray-950 border border-gray-800 p-3 rounded-xl space-y-1">
-                      <div className="text-xs font-bold text-amber-400">{log.speaker}</div>
-                      <p className="text-sm text-gray-200">{log.content}</p>
-                    </div>
-                  ))
+                  watchLogs.map((log, idx) => {
+                    const style = getAISpeakerStyle(log.speaker);
+                    return (
+                      <div key={idx} className={`border ${style.border} p-3.5 rounded-2xl space-y-1.5 transition-all`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-bold ${style.text} flex items-center gap-1`}>
+                            <span>{style.icon}</span> {log.speaker}
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${style.badge}`}>
+                            AI対戦
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-100 whitespace-pre-wrap leading-relaxed">{log.content}</p>
+                      </div>
+                    );
+                  })
                 )}
+                <div ref={chatEndRef} />
               </div>
             </div>
           )}
