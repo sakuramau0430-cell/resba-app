@@ -57,26 +57,29 @@ export default function Home() {
     const userMsg = input.trim();
     setInput('');
     
-    // お題が設定されていて最初のメッセージならお題も含める
-    const currentMessages: Message[] = [...messages];
+    // 送信用メッセージの組み立て
+    let contentToSend = userMsg;
     if (messages.length === 0 && topic) {
-      currentMessages.push({ role: 'user', content: `【お題：${topic}】\n${userMsg}` });
-    } else {
-      currentMessages.push({ role: 'user', content: userMsg });
+      contentToSend = `【お題：${topic}】\n${userMsg}`;
     }
 
-    setMessages(currentMessages);
+    const newMessages: Message[] = [
+      ...messages,
+      { role: 'user', content: contentToSend }
+    ];
+
+    setMessages(newMessages);
     setLoading(true);
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: currentMessages, persona }),
+        body: JSON.stringify({ messages: newMessages, persona }),
       });
       const data = await res.json();
       if (data.result) {
-        setMessages([...currentMessages, { role: 'assistant', content: data.result }]);
+        setMessages([...newMessages, { role: 'assistant', content: data.result }]);
       } else {
         alert('エラーが発生しました');
       }
