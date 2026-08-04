@@ -10,6 +10,10 @@ export const metadata: Metadata = {
     description: 'AIとの1on1レスバ特訓やスクショ画像からの反論作成ができるアプリ。',
     type: 'website',
   },
+  // Google Search Console 所有権確認用
+  verification: {
+    google: 'i_HyB3hTWhnIfvoFBf9pIQOD5R-X__YDZL0ig-M7kkA',
+  },
 };
 
 export default function RootLayout({
