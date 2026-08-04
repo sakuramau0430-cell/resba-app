@@ -41,11 +41,42 @@ export default function Home() {
   const [watchLogs, setWatchLogs] = useState<WatchMessage[]>([]);
   const [watching, setWatching] = useState(false);
 
+  // --- 【Xリアルタイムトレンド】 ---
+  const [liveTrend, setLiveTrend] = useState<string>('取得中...');
+
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, watchLogs]);
+
+  // リアルタイムトレンドの取得
+  useEffect(() => {
+    const fetchTrend = async () => {
+      try {
+        const res = await fetch('/api/trend');
+        const data = await res.json();
+        if (data.trend) {
+          setLiveTrend(data.trend);
+        }
+      } catch (e) {
+        setLiveTrend('ストローマン論法');
+      }
+    };
+    fetchTrend();
+  }, []);
+
+  // 会話リセット関数
+  const handleResetChat = () => {
+    if (messages.length > 0 && !confirm('現在の会話履歴をリセットして、新しいレスバを開始しますか？')) {
+      return;
+    }
+    setMessages([]);
+    setJudgeResult(null);
+    setTopic('');
+    setInput('');
+    setMode('chat');
+  };
 
   // 画像ファイル処理関数
   const processImageFile = useCallback(async (file: File) => {
@@ -222,6 +253,14 @@ export default function Home() {
             <div className="flex items-center gap-2 px-2">
               <span className="text-2xl font-black text-white tracking-wider">レスバ.AI</span>
             </div>
+
+            {/* 新規対話ボタン */}
+            <button
+              onClick={handleResetChat}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30"
+            >
+              <span>✨</span> 新規レスバを開始
+            </button>
             
             <nav className="space-y-1">
               {[
@@ -256,6 +295,12 @@ export default function Home() {
           <header className="sticky top-0 bg-black/80 backdrop-blur-sm border-b border-gray-800 z-10">
             <div className="px-4 py-3 flex justify-between items-center">
               <h1 className="text-lg font-bold">レスバ・アリーナ X</h1>
+              <button
+                onClick={handleResetChat}
+                className="text-xs bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1"
+              >
+                <span>🔄</span> リセット
+              </button>
             </div>
             
             {/* モバイル用タブ切り替え */}
@@ -292,11 +337,11 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 items-center">
-                  <button onClick={handleGenerateTopic} disabled={topicLoading} className="bg-blue-500 text-xs px-3 py-1.5 rounded-full font-bold text-white">
+                <div className="flex gap-2 items-center flex-wrap">
+                  <button onClick={handleGenerateTopic} disabled={topicLoading} className="bg-blue-500 hover:bg-blue-600 text-xs px-3 py-1.5 rounded-full font-bold text-white transition">
                     🎲 お題自動生成
                   </button>
-                  <button onClick={handleJudge} disabled={judgeLoading} className="bg-purple-600 text-xs px-3 py-1.5 rounded-full font-bold text-white">
+                  <button onClick={handleJudge} disabled={judgeLoading} className="bg-purple-600 hover:bg-purple-700 text-xs px-3 py-1.5 rounded-full font-bold text-white transition">
                     ⚖️ 審判に採点してもらう
                   </button>
                 </div>
@@ -425,7 +470,7 @@ export default function Home() {
 
               <div className="flex-1 overflow-y-auto space-y-3 bg-black">
                 {watchLogs.length === 0 ? (
-                  <div className="text-center text-gray-600 text-xs py-10">「次のレスを観戦」を押してAI同士のレスバを開始</div>
+                  <div className="text-center text-gray-600 text-xs py-10">「次のレスバを観戦」を押してAI同士のレスバを開始</div>
                 ) : (
                   watchLogs.map((log, idx) => (
                     <div key={idx} className="bg-gray-950 border border-gray-800 p-3 rounded-xl space-y-1">
@@ -444,15 +489,43 @@ export default function Home() {
         <aside className="hidden lg:flex flex-col w-80 p-4 space-y-4 h-screen sticky top-0 overflow-y-auto">
           {/* トレンドワード */}
           <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 space-y-3">
-            <h2 className="font-bold text-sm text-white">🔥 トレンドのレスバ</h2>
+            <h2 className="font-bold text-sm text-white flex items-center justify-between">
+              <span>🔥 トレンドのレスバ</span>
+              <span className="text-[10px] font-normal bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded-full animate-pulse">
+                LIVE
+              </span>
+            </h2>
+
             <div className="space-y-2.5">
+              {/* X リアルタイム動的トレンド */}
+              <div
+                onClick={() => {
+                  setTopic(liveTrend);
+                  setMode('chat');
+                }}
+                className="text-xs cursor-pointer bg-blue-950/30 border border-blue-900/50 hover:bg-blue-900/40 p-2 rounded-xl transition space-y-0.5"
+              >
+                <div className="text-blue-400 text-[10px] font-bold flex justify-between">
+                  <span>X (Twitter) 最新トレンド</span>
+                  <span className="text-gray-500">クリックでお題にセット</span>
+                </div>
+                <div className="font-bold text-white text-sm">#{liveTrend}</div>
+              </div>
+
               {[
                 { tag: 'ストローマン論法', count: '1,240ポスト' },
                 { tag: 'AI vs 人間議論', count: '850ポスト' },
                 { tag: 'きのこの山 vs たけのこの里', count: '3,120ポスト' },
                 { tag: 'ひろゆき構文', count: '540ポスト' },
               ].map((t, idx) => (
-                <div key={idx} className="text-xs cursor-pointer hover:bg-gray-900 p-1.5 rounded-lg transition">
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setTopic(t.tag);
+                    setMode('chat');
+                  }}
+                  className="text-xs cursor-pointer hover:bg-gray-900 p-1.5 rounded-lg transition"
+                >
                   <div className="text-gray-500 text-[10px]">日本のトレンド</div>
                   <div className="font-bold text-gray-200">#{t.tag}</div>
                   <div className="text-gray-500 text-[10px]">{t.count}</div>
