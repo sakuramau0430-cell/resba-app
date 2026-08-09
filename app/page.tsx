@@ -59,38 +59,72 @@ export default function Home() {
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
       recognition.lang = 'ja-JP';
-      recognition.interimResults = true; // 途中経過も取得して応答性を上げる
-      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.continuous = true; // 喋り終わっても自動で終了しないように変更
 
       recognition.onstart = () => {
         setIsListening(true);
       };
 
       recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
-          .join('');
-        setInput(transcript);
+        let currentTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          currentTranscript += event.results[i][0].transcript;
+        }
+        if (currentTranscript) {
+          setInput((prev) => {
+            // 重複追加を防ぎつつテキストを更新
+            return currentTranscript;
+          });
+        }
       };
 
       recognition.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-        if (event.error === 'not-allowed') {
-          alert('マイクの使用許可が拒否されています。ブラウザのアドレスバー左側の鍵アイコンからマイクを許可してください。');
-        } else if (event.error === 'no-speech') {
-          // 音声が検出されなかった場合
+        // 無音（no-speech）エラーの時はボタンをオフにせずそのまま維持
+        if (event.error !== 'no-speech') {
+          setIsListening(false);
         }
       };
 
       recognition.onend = () => {
-        setIsListening(false);
+        // ユーザーが手動で止めるまで、自動停止しても再起動を試みる
+        setIsListening((currentlyListening) => {
+          if (currentlyListening) {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.log('Re-start failed', e);
+            }
+          }
+          return currentlyListening;
+        });
       };
 
       recognitionRef.current = recognition;
     }
   }
 }, []);
+
+const toggleSpeechRecognition = () => {
+  if (!recognitionRef.current) {
+    alert('お使いのブラウザは音声認識に対応していません');
+    return;
+  }
+
+  if (isListening) {
+    setIsListening(false);
+    recognitionRef.current.stop();
+  } else {
+    try {
+      setIsListening(true);
+      recognitionRef.current.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  }
+};
 
   // 音声読み上げヘルパー
   const speakText = (text: string) => {
