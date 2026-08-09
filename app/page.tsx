@@ -28,6 +28,11 @@ export default function Home() {
   const [judgeResult, setJudgeResult] = useState<JudgeResult | null>(null);
   const [judgeLoading, setJudgeLoading] = useState(false);
 
+  // --- 【音声入力・読み上げ】 ---
+  const [isListening, setIsListening] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(true);
+  const recognitionRef = useRef<any>(null);
+
   // --- 【反論参謀 & OCR】 ---
   const [opponentText, setOpponentText] = useState('');
   const [myStance, setMyStance] = useState('');
@@ -52,15 +57,67 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, watchLogs]);
 
+  // 音声読み上げヘルパー
+  const speakText = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel(); // 前の読み上げを停止
+    const uttr = new SpeechSynthesisUtterance(text);
+    uttr.lang = 'ja-JP';
+    uttr.rate = 1.1; // やや早口で煽り感を出す
+    window.speechSynthesis.speak(uttr);
+  };
+
+  const stopSpeech = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
+  // 音声入力の初期化
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.interimResults = false;
+        recognition.continuous = false;
+
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+          setIsListening(false);
+        };
+
+        recognition.onerror = () => setIsListening(false);
+        recognition.onend = () => setIsListening(false);
+
+        recognitionRef.current = recognition;
+      }
+    }
+  }, []);
+
+  const toggleSpeechRecognition = () => {
+    if (!recognitionRef.current) {
+      alert('お使いのブラウザは音声認識に対応していません（Chrome等をご利用ください）');
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
+
   // リアルタイムトレンドの取得
   useEffect(() => {
     const fetchTrend = async () => {
       try {
         const res = await fetch('/api/trend');
         const data = await res.json();
-        if (data.trend) {
-          setLiveTrend(data.trend);
-        }
+        if (data.trend) setLiveTrend(data.trend);
       } catch (e) {
         setLiveTrend('ストローマン論法');
       }
@@ -68,11 +125,10 @@ export default function Home() {
     fetchTrend();
   }, []);
 
-  // 会話リセット関数
+  // 会話リセット
   const handleResetChat = () => {
-    if (messages.length > 0 && !confirm('現在の会話履歴をリセットして、新しいレスバを開始しますか？')) {
-      return;
-    }
+    stopSpeech();
+    if (messages.length > 0 && !confirm('現在の会話履歴をリセットしますか？')) return;
     setMessages([]);
     setJudgeResult(null);
     setTopic('');
@@ -82,7 +138,7 @@ export default function Home() {
     setMode('chat');
   };
 
-  // 画像ファイル処理関数
+  // 画像ファイル処理
   const processImageFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return;
 
@@ -99,13 +155,11 @@ export default function Home() {
     }
   }, []);
 
-  // ファイル選択からの画像読み込み
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) processImageFile(file);
   };
 
-  // ドラッグ＆ドロップイベントハンドラー
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -123,7 +177,6 @@ export default function Home() {
     if (file) processImageFile(file);
   };
 
-  // クリップボードからの貼り付け（Ctrl + V）ハンドラー
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
@@ -180,7 +233,10 @@ export default function Home() {
         body: JSON.stringify({ messages: newMessages, persona }),
       });
       const data = await res.json();
-      if (data.result) setMessages([...newMessages, { role: 'assistant', content: data.result }]);
+      if (data.result) {
+        setMessages([...newMessages, { role: 'assistant', content: data.result }]);
+        if (autoSpeak) speakText(data.result);
+      }
     } catch (e) {
       alert('送信に失敗しました');
     } finally {
@@ -188,7 +244,7 @@ export default function Home() {
     }
   };
 
-  // 審判判定 (ユーザー vs AI)
+  // 審判判定
   const handleJudge = async () => {
     if (messages.length === 0) return alert('まずはレスバをしてから判定を押してください');
     setJudgeLoading(true);
@@ -239,6 +295,7 @@ export default function Home() {
       const data = await res.json();
       if (data.speaker && data.content) {
         setWatchLogs((prev) => [...prev, data]);
+        if (autoSpeak) speakText(data.content);
       }
     } catch (e) {
       alert('観戦レスバの生成に失敗しました');
@@ -252,7 +309,6 @@ export default function Home() {
     if (watchLogs.length === 0) return alert('まずはレスバを発生させてから判定を押してください');
     setWatchJudgeLoading(true);
     try {
-      // 観戦ログを標準メッセージ形式に変換して審判へ送る
       const mappedMessages = watchLogs.map((log) => ({
         role: (log.speaker.includes('冷笑') ? 'user' : 'assistant') as 'user' | 'assistant',
         content: `[${log.speaker}] ${log.content}`,
@@ -272,7 +328,6 @@ export default function Home() {
     }
   };
 
-  // AIの種類に応じたスタイル定義ヘルパー
   const getAISpeakerStyle = (speaker: string) => {
     if (speaker.includes('冷笑')) {
       return {
@@ -302,14 +357,13 @@ export default function Home() {
     <main className="min-h-screen bg-black text-gray-100 flex justify-center font-sans">
       <div className="w-full max-w-[1200px] flex">
         
-        {/* --- 左サイドバー（PC時のみ表示） --- */}
+        {/* 左サイドバー */}
         <aside className="hidden md:flex flex-col w-64 p-4 border-r border-gray-800 h-screen sticky top-0 justify-between">
           <div className="space-y-6">
             <div className="flex items-center gap-2 px-2">
               <span className="text-2xl font-black text-white tracking-wider">レスバ.AI</span>
             </div>
 
-            {/* 新規対話ボタン */}
             <button
               onClick={handleResetChat}
               className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30"
@@ -337,28 +391,44 @@ export default function Home() {
             </nav>
           </div>
 
-          <div className="p-3 bg-gray-900 border border-gray-800 rounded-xl text-xs space-y-1">
-            <div className="text-gray-400 font-bold">💡 勝ちの極意</div>
-            <p className="text-gray-500 text-[11px]">感情的にならず、相手の「前提」と「極論」を指摘するのが最も効果的です。</p>
+          <div className="p-3 bg-gray-900 border border-gray-800 rounded-xl text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 font-bold">🔊 自動読み上げ</span>
+              <input
+                type="checkbox"
+                checked={autoSpeak}
+                onChange={(e) => setAutoSpeak(e.target.checked)}
+                className="toggle cursor-pointer"
+              />
+            </div>
+            <p className="text-gray-500 text-[11px]">AIのレスを音声で自動再生します。</p>
           </div>
         </aside>
 
-        {/* --- メインコンテンツ（中央） --- */}
+        {/* メインコンテンツ */}
         <div className="flex-1 max-w-[600px] border-r border-gray-800 flex flex-col min-h-screen">
           
-          {/* ヘッダー */}
           <header className="sticky top-0 bg-black/80 backdrop-blur-sm border-b border-gray-800 z-10">
             <div className="px-4 py-3 flex justify-between items-center">
               <h1 className="text-lg font-bold">レスバ・アリーナ X</h1>
-              <button
-                onClick={handleResetChat}
-                className="text-xs bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1"
-              >
-                <span>🔄</span> リセット
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAutoSpeak(!autoSpeak)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                    autoSpeak ? 'bg-blue-950 border-blue-700 text-blue-300' : 'bg-gray-900 border-gray-800 text-gray-500'
+                  }`}
+                >
+                  {autoSpeak ? '🔊 ON' : '🔇 OFF'}
+                </button>
+                <button
+                  onClick={handleResetChat}
+                  className="text-xs bg-gray-900 hover:bg-gray-800 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1"
+                >
+                  <span>🔄</span> リセット
+                </button>
+              </div>
             </div>
             
-            {/* モバイル用タブ切り替え */}
             <div className="flex md:hidden w-full border-b border-gray-800">
               {(['chat', 'assist', 'watch'] as Mode[]).map((tab) => (
                 <button key={tab} onClick={() => setMode(tab)} className="flex-1 hover:bg-gray-900 transition">
@@ -371,7 +441,7 @@ export default function Home() {
             </div>
           </header>
 
-          {/* --- 1. VS AI 特訓 モード --- */}
+          {/* モード 1: VS AI 特訓 */}
           {mode === 'chat' && (
             <div className="flex-1 flex flex-col">
               <div className="p-4 border-b border-gray-800 space-y-3">
@@ -403,7 +473,6 @@ export default function Home() {
 
                 {topic && <div className="text-xs text-amber-400 bg-gray-900 p-2 rounded">お題: {topic}</div>}
 
-                {/* 審判結果表示 */}
                 {judgeResult && (
                   <div className="p-3 bg-purple-950/40 border border-purple-800 rounded-lg text-xs space-y-1">
                     <div className="font-bold text-purple-300">⚖️ 判定結果: {judgeResult.winner}</div>
@@ -416,18 +485,25 @@ export default function Home() {
                 )}
               </div>
 
-              {/* チャット対戦ログ */}
+              {/* 対話ログ */}
               <div className="flex-1 overflow-y-auto bg-black p-4 space-y-4">
                 {messages.length === 0 ? (
                   <div className="text-center text-gray-600 text-xs py-10">メッセージを入力するか「お題自動生成」を押して開始！</div>
                 ) : (
                   messages.map((m, idx) => (
-                    <div key={idx} className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs">
+                    <div key={idx} className="flex gap-3 items-start">
+                      <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs shrink-0">
                         {m.role === 'user' ? '👤' : '🤖'}
                       </div>
-                      <div className="flex-1 text-sm bg-gray-900 p-3 rounded-xl border border-gray-800 whitespace-pre-wrap">
+                      <div className="flex-1 text-sm bg-gray-900 p-3 rounded-xl border border-gray-800 whitespace-pre-wrap relative group">
                         {m.content}
+                        <button
+                          onClick={() => speakText(m.content)}
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-xs text-gray-400 hover:text-white transition"
+                          title="読み上げ"
+                        >
+                          🔊
+                        </button>
                       </div>
                     </div>
                   ))
@@ -435,22 +511,32 @@ export default function Home() {
                 <div ref={chatEndRef} />
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-800 flex gap-2">
+              <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-800 flex gap-2 items-center">
+                <button
+                  type="button"
+                  onClick={toggleSpeechRecognition}
+                  className={`p-2 rounded-full border transition shrink-0 ${
+                    isListening ? 'bg-red-600 border-red-500 text-white animate-pulse' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'
+                  }`}
+                  title="音声入力"
+                >
+                  🎙️
+                </button>
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="主張を入力..."
+                  placeholder={isListening ? '音声聞き取り中...' : '主張を入力...'}
                   className="flex-1 bg-gray-900 border border-gray-800 rounded-full px-4 py-2 text-sm text-white focus:outline-none"
                 />
-                <button type="submit" disabled={loading} className="bg-blue-500 text-xs px-5 py-2 rounded-full font-bold text-white">
+                <button type="submit" disabled={loading} className="bg-blue-500 text-xs px-5 py-2.5 rounded-full font-bold text-white shrink-0">
                   送信
                 </button>
               </form>
             </div>
           )}
 
-          {/* --- 2. 反論参謀 --- */}
+          {/* モード 2: 反論参謀 */}
           {mode === 'assist' && (
             <div className="flex-1 p-4 space-y-4 overflow-y-auto">
               <div
@@ -497,8 +583,15 @@ export default function Home() {
                     { label: '🤓 論理派', text: replies.logic },
                     { label: '🤬 煽りマウント', text: replies.provoke },
                   ].map((item, i) => (
-                    <div key={i} className="bg-gray-900 border border-gray-800 p-3 rounded-lg space-y-1">
-                      <div className="text-xs font-bold text-blue-400">{item.label}</div>
+                    <div key={i} className="bg-gray-900 border border-gray-800 p-3 rounded-lg space-y-1 relative group">
+                      <div className="flex justify-between items-center">
+                        <div className="text-xs font-bold text-blue-400">{item.label}</div>
+                        {item.text && (
+                          <button onClick={() => speakText(item.text!)} className="text-xs text-gray-400 hover:text-white">
+                            🔊 読み上げ
+                          </button>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-200 whitespace-pre-wrap">{item.text}</p>
                     </div>
                   ))}
@@ -507,7 +600,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* --- 3. AI vs AI 観戦モード --- */}
+          {/* モード 3: AI vs AI 観戦 */}
           {mode === 'watch' && (
             <div className="flex-1 flex flex-col p-4 space-y-4">
               <div className="space-y-2">
@@ -535,7 +628,6 @@ export default function Home() {
                 )}
               </div>
 
-              {/* 勝敗判定表示 */}
               {watchJudgeResult && (
                 <div className="p-3 bg-purple-950/40 border border-purple-800 rounded-xl text-xs space-y-1">
                   <div className="font-bold text-purple-300 text-sm">🏆 勝者: {watchJudgeResult.winner}</div>
@@ -543,7 +635,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* 観戦対話ログ */}
               <div className="flex-1 overflow-y-auto space-y-3 bg-black">
                 {watchLogs.length === 0 ? (
                   <div className="text-center text-gray-600 text-xs py-10">「次のレスを観戦」を押してAI同士のレスバを開始</div>
@@ -551,14 +642,19 @@ export default function Home() {
                   watchLogs.map((log, idx) => {
                     const style = getAISpeakerStyle(log.speaker);
                     return (
-                      <div key={idx} className={`border ${style.border} p-3.5 rounded-2xl space-y-1.5 transition-all`}>
+                      <div key={idx} className={`border ${style.border} p-3.5 rounded-2xl space-y-1.5 transition-all relative group`}>
                         <div className="flex items-center justify-between">
                           <span className={`text-xs font-bold ${style.text} flex items-center gap-1`}>
                             <span>{style.icon}</span> {log.speaker}
                           </span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${style.badge}`}>
-                            AI対戦
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => speakText(log.content)} className="text-xs text-gray-400 hover:text-white">
+                              🔊
+                            </button>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${style.badge}`}>
+                              AI対戦
+                            </span>
+                          </div>
                         </div>
                         <p className="text-sm text-gray-100 whitespace-pre-wrap leading-relaxed">{log.content}</p>
                       </div>
@@ -572,9 +668,8 @@ export default function Home() {
 
         </div>
 
-        {/* --- 右サイドバー（PC時のみ表示） --- */}
+        {/* 右サイドバー */}
         <aside className="hidden lg:flex flex-col w-80 p-4 space-y-4 h-screen sticky top-0 overflow-y-auto">
-          {/* トレンドワード */}
           <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 space-y-3">
             <h2 className="font-bold text-sm text-white flex items-center justify-between">
               <span>🔥 トレンドのレスバ</span>
@@ -584,7 +679,6 @@ export default function Home() {
             </h2>
 
             <div className="space-y-2.5">
-              {/* X リアルタイム動的トレンド */}
               <div
                 onClick={() => {
                   setTopic(liveTrend);
@@ -621,7 +715,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 今日のランキング */}
           <div className="bg-gray-950 border border-gray-800 rounded-2xl p-4 space-y-3">
             <h2 className="font-bold text-sm text-white">🏆 本日の論破王AI</h2>
             <div className="space-y-2 text-xs">
